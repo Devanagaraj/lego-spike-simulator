@@ -48,13 +48,32 @@
     let variableCreateCallback: variableFlyout.VariableCreateCallback | undefined = undefined;
     let procedureDialogOpen = false;
     let procedureCreateCallback: procedureFlyout.ProcedureCreateCallback | undefined = undefined;
-    let simulatorOpen = false;
+    let simulatorOpen = true;
     let blocklyOpen = true;
     let split = 2;
     let observer = new ResizeObserver(onBlocklyResize);
     let print = false;
     let printDialogOpen = false;
     let printColour = false;
+    let workspaceSaveTimer: ReturnType<typeof setTimeout> | undefined;
+    const workspaceCacheKey = 'lego-spike-workspace-v1';
+
+    function saveWorkspaceToBrowser() {
+        if (!workspace) return;
+        try {
+            localStorage.setItem(
+                workspaceCacheKey,
+                JSON.stringify(Blockly.serialization.workspaces.save(workspace))
+            );
+        } catch (error) {
+            console.warn('Could not cache the Blockly workspace', error);
+        }
+    }
+
+    function scheduleWorkspaceSave() {
+        clearTimeout(workspaceSaveTimer);
+        workspaceSaveTimer = setTimeout(saveWorkspaceToBrowser, 400);
+    }
 
     function sleep(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
@@ -101,6 +120,8 @@
             comments: true,
             zoom: {
                 controls: true,
+                // Keep the mouse wheel for normal page scrolling; use the
+                // Blockly zoom controls or pinch gesture to change scale.
                 wheel: false,
                 startScale: 0.675,
                 maxScale: 3,
@@ -108,19 +129,123 @@
                 scaleSpeed: 1.2,
                 pinch: true
             },
+            // Keep wheel input for Blockly workspace scrolling while zoom is
+            // controlled by the visible zoom buttons (or pinch gesture).
+            move: {
+                wheel: true,
+                drag: true,
+                scrollbars: true
+            },
             toolbox: toolbox
         });
         variableFlyout.registerVariableFlyout(workspace, createVariableDialog);
         procedureFlyout.registerProcedureFlyout(workspace, createProcedureDialog);
         registerAudioDialog(workspace, createAudioDialog);
         selectAudio('Cat Meow 1');
+        let restoredWorkspace = false;
+        try {
+            const savedWorkspace = localStorage.getItem(workspaceCacheKey);
+            if (savedWorkspace) {
+                Blockly.serialization.workspaces.load(JSON.parse(savedWorkspace), workspace);
+                if (!localStorage.getItem('spike-drive-layout-ab-v1')) {
+                    for (const block of workspace.getAllBlocks(false)) {
+                        if (block.type !== 'flippermove_movement-port-selector') continue;
+                        const field = 'field_flippermove_movement-port-selector';
+                        if (['CD', 'AC'].includes(block.getFieldValue(field))) block.setFieldValue('AB', field);
+                    }
+                    localStorage.setItem(workspaceCacheKey, JSON.stringify(Blockly.serialization.workspaces.save(workspace)));
+                    localStorage.setItem('spike-drive-layout-ab-v1', '1');
+                }
+                restoredWorkspace = true;
+            } else {
+                localStorage.setItem('spike-drive-layout-ab-v1', '1');
+            }
+        } catch (error) {
+            console.warn('Could not restore the Blockly workspace', error);
+        }
+        // Start with a small, editable Simple Bot example. Opening a project replaces it.
+        if (!restoredWorkspace && workspace.getTopBlocks(false).length === 0) {
+            Blockly.serialization.workspaces.load(
+                {
+                    blocks: {
+                        languageVersion: 0,
+                        blocks: [
+                            {
+                                type: 'flipperevents_whenProgramStarts',
+                                x: 40,
+                                y: 40,
+                                next: {
+                                    block: {
+                                        type: 'flippermove_setMovementPair',
+                                        inputs: {
+                                            PAIR: {
+                                                shadow: {
+                                                    type: 'flippermove_movement-port-selector',
+                                                    fields: {
+                                                        'field_flippermove_movement-port-selector':
+                                                            'AB'
+                                                    }
+                                                }
+                                            }
+                                        },
+                                        next: {
+                                            block: {
+                                                type: 'flippermove_movementSpeed',
+                                                inputs: {
+                                                    SPEED: {
+                                                        shadow: {
+                                                            type: 'math_number',
+                                                            fields: { NUM: 30 }
+                                                        }
+                                                    }
+                                                },
+                                                next: {
+                                                    block: {
+                                                        type: 'flippermove_move',
+                                                        fields: { UNIT: 'cm' },
+                                                        inputs: {
+                                                            DIRECTION: {
+                                                                shadow: {
+                                                                    type: 'flippermove_custom-icon-direction',
+                                                                    fields: {
+                                                                        'field_flippermove_custom-icon-direction':
+                                                                            'forward'
+                                                                    }
+                                                                }
+                                                            },
+                                                            VALUE: {
+                                                                shadow: {
+                                                                    type: 'math_number',
+                                                                    fields: { NUM: 30 }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                },
+                workspace
+            );
+        }
         const zoomToFit = new ZoomToFitControl(workspace);
         zoomToFit.init();
         observer.observe(element);
-        workspace.createVariable('message1', 'broadcast');
+        if (!Blockly.Variables.nameUsedWithAnyType('message1', workspace)) {
+            workspace.createVariable('message1', 'broadcast');
+        }
+        workspace.addChangeListener(scheduleWorkspaceSave);
     });
 
     onDestroy(() => {
+        clearTimeout(workspaceSaveTimer);
+        saveWorkspaceToBrowser();
+        workspace?.removeChangeListener(scheduleWorkspaceSave);
         if (zoomToFit) {
             zoomToFit.dispose();
         }
@@ -396,7 +521,7 @@
 <ProcedureDialog bind:modalOpen={procedureDialogOpen} bind:callback={procedureCreateCallback} />
 <PrintDialog bind:modalOpen={printDialogOpen} callback={printCallback} />
 
-<div class="relative h-full w-full overflow-hidden flex flex-row">
+<div class="relative h-full w-full overflow-auto flex flex-row">
     <!-- flex-col-reverse so that the buttons are higher in z order -->
     <div class="relative {blocklyOpen ? 'flex-1' : 'w-0'} h-full flex flex-col overflow-hidden">
         <div
@@ -460,7 +585,7 @@
                 <Tooltip>Close the code panel without losing code</Tooltip>
             {/if}
         </div>
-        <div class="flex-1 w-full overflow-hidden">
+        <div class="flex-1 w-full min-h-0 overflow-y-auto overflow-x-hidden">
             <div id="blocklyDiv" />
         </div>
     </div>

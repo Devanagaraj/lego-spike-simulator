@@ -13,8 +13,18 @@ export default defineConfig({
         }
     },
     root: './',
+    server: {
+        proxy: {
+            '/ldraw-library/complete.zip': {
+                target: 'https://library.ldraw.org',
+                changeOrigin: true,
+                rewrite: () => '/library/updates/complete.zip'
+            }
+        }
+    },
     build: {
-        outDir: 'dist'
+        outDir: 'dist',
+        assetsInlineLimit: 1024 * 1024
     },
     publicDir: 'static'
 });

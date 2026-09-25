@@ -6,6 +6,7 @@
         clearPorts,
         setPort,
         setGearRatio,
+        setRotationAxis,
         saveMPD
     } from '$lib/ldraw/components';
     import { allPorts, Hub } from '$lib/spike/vm';
@@ -28,6 +29,11 @@
             for (const wheel of hub.wheels) {
                 setPort(robot, 'main', wheel.port, wheel.id);
                 setGearRatio(robot, wheel.gearing, wheel.id);
+            }
+            for (const attachment of hub.attachments) {
+                setPort(robot, 'main', attachment.port, attachment.id);
+                setGearRatio(robot, attachment.ratio, attachment.id);
+                setRotationAxis(robot, attachment.axis, attachment.id);
             }
             const content = saveMPD(robot);
             const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
@@ -61,7 +67,8 @@
                 anchored: o.anchored,
                 position: o.position,
                 rotation: o.rotation,
-                name: o.name
+                name: o.name,
+                displaySize: o.displaySize
             }))
         };
         zip.file('scene.json', JSON.stringify(json));
@@ -74,6 +81,7 @@
     backdropClass="fixed inset-0 z-[80] bg-gray-900 bg-opacity-50 dark:bg-opacity-80"
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[90] w-full p-4 flex"
     title="Save simulation"
+    outsideclose={true}
     bind:open={modalOpen}
 >
     <div class="flex flex-col gap-2 items-center">

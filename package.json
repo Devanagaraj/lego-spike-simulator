@@ -7,6 +7,7 @@
         "preview": "vite preview",
         "check": "svelte-check --tsconfig ./svelte.check.tsconfig.json",
         "check:watch": "svelte-check --tsconfig ./svelte.check.tsconfig.json --watch",
+        "test:simulation": "esbuild tests/simulation.test.ts --bundle --platform=node --format=cjs --external:jsdom --outfile=tests/.generated/simulation.test.cjs && node --require ./tests/setup.cjs tests/.generated/simulation.test.cjs",
         "lint": "prettier --check . && eslint .",
         "format": "prettier --write ."
     },

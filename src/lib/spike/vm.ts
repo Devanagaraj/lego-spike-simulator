@@ -248,6 +248,22 @@ export class ActionStatement extends Statement {
         this.arguments = args;
     }
 
+    /** Start a drive motor for a requested signed wheel speed. */
+    startDriveMotor(thread: Thread, port: PortType, wheelPercent: number): number | undefined {
+        const attachment = thread.vm.hub.ports[port];
+        if (!attachment || attachment.type !== 'motor') return undefined;
+        const wheel = thread.vm.hub.wheels.find((candidate) => candidate.port === port);
+        const ratio = wheel?.gearing ?? 1;
+        const motorPercent = ratio === 0 ? 0 : wheelPercent / ratio;
+        const options = {
+            reverse: motorPercent < 0,
+            percent: Math.abs(motorPercent),
+            ignorePresetSpeed: true
+        };
+        attachment.motor!.startMotor(options);
+        return Math.abs(attachment.motor!.getRpm(options));
+    }
+
     *execute_bargraphmonitor(thread: Thread, op: string): Generator<VMTask> {
         yield* super._execute(thread);
     }
@@ -592,40 +608,8 @@ export class ActionStatement extends Statement {
             if (right < -1.0) {
                 right = -1.0;
             }
-            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
-            let speed = 0;
-            let reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (left < 0) {
-                    speed = -left * 100;
-                    reverse = false;
-                } else {
-                    speed = left * 100;
-                    reverse = true;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair2];
-            speed = 0;
-            reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (right < 0) {
-                    speed = -right * 100;
-                    reverse = true;
-                } else {
-                    speed = right * 100;
-                    reverse = false;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
+            this.startDriveMotor(thread, thread.vm.hub.movePair1, left * 100);
+            this.startDriveMotor(thread, thread.vm.hub.movePair2, right * 100);
         } else if (op == 'movementSetAcceleration') {
             // ignore this, we start abruptly
             const acceleration = this.arguments[0].evaluate(thread).getString();
@@ -849,36 +833,9 @@ export class ActionStatement extends Statement {
             } else if (direction == 'back') {
                 baseSpeed = -thread.vm.hub.moveSpeed;
             }
-            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
-            let rpm = 0;
-            let reverse = false;
-            let moveSpeed = baseSpeed;
-            if (attachment && attachment.type == 'motor') {
-                if (baseSpeed < 0) {
-                    moveSpeed = -baseSpeed;
-                    reverse = false;
-                } else {
-                    reverse = true;
-                }
-                const options = { reverse: reverse, percent: moveSpeed, ignorePresetSpeed: true };
-                attachment.motor!.startMotor(options);
-                rpm = attachment.motor!.getRpm(options);
-            }
-            reverse = false;
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair2];
-            if (attachment && attachment.type == 'motor') {
-                if (baseSpeed < 0) {
-                    moveSpeed = -baseSpeed;
-                    reverse = true;
-                } else {
-                    reverse = false;
-                }
-                const options = { reverse: reverse, percent: moveSpeed, ignorePresetSpeed: true };
-                attachment.motor!.startMotor(options);
-                if (attachment.motor!.getRpm(options) > rpm) {
-                    rpm = attachment.motor!.getRpm(options);
-                }
-            }
+            const rpm1 = this.startDriveMotor(thread, thread.vm.hub.movePair1, baseSpeed);
+            const rpm2 = this.startDriveMotor(thread, thread.vm.hub.movePair2, baseSpeed);
+            const rpm = Math.max(rpm1 ?? 0, rpm2 ?? 0);
             if (rpm && rpm > 0) {
                 if (unit == 'rotations') {
                     const revolution_time = 60.0 / rpm;
@@ -903,7 +860,7 @@ export class ActionStatement extends Statement {
                     yield thread.vm.sleep(revs * revolution_time);
                 }
             }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
+            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
             if (attachment && attachment.type == 'motor') {
                 attachment.motor!.reverse = false;
                 attachment.motor!.stopMotor();
@@ -937,40 +894,8 @@ export class ActionStatement extends Statement {
                 thread.vm.hub.movePair2 = port;
             }
         } else if (op == 'startMove') {
-            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
-            let speed = 0;
-            let reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed;
-                    reverse = false;
-                } else {
-                    speed = thread.vm.hub.moveSpeed;
-                    reverse = true;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair2];
-            speed = 0;
-            reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed;
-                    reverse = true;
-                } else {
-                    speed = thread.vm.hub.moveSpeed;
-                    reverse = false;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
+            this.startDriveMotor(thread, thread.vm.hub.movePair1, thread.vm.hub.moveSpeed);
+            this.startDriveMotor(thread, thread.vm.hub.movePair2, thread.vm.hub.moveSpeed);
         } else if (op == 'stopMove') {
             let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
             if (attachment && attachment.type == 'motor') {
@@ -1008,40 +933,8 @@ export class ActionStatement extends Statement {
             if (right < -1.0) {
                 right = -1.0;
             }
-            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
-            let speed = 0;
-            let reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed * left;
-                    reverse = false;
-                } else {
-                    speed = thread.vm.hub.moveSpeed * left;
-                    reverse = true;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair2];
-            speed = 0;
-            reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed * right;
-                    reverse = true;
-                } else {
-                    speed = thread.vm.hub.moveSpeed * right;
-                    reverse = false;
-                }
-                attachment.motor!.startMotor({
-                    reverse: reverse,
-                    percent: speed,
-                    ignorePresetSpeed: true
-                });
-            }
+            this.startDriveMotor(thread, thread.vm.hub.movePair1, thread.vm.hub.moveSpeed * left);
+            this.startDriveMotor(thread, thread.vm.hub.movePair2, thread.vm.hub.moveSpeed * right);
         } else if (op == 'steer') {
             const steer = this.arguments[0].evaluate(thread).getNumber();
             const amount = this.arguments[1].evaluate(thread).getNumber();
@@ -1070,37 +963,9 @@ export class ActionStatement extends Statement {
             if (right < -1.0) {
                 right = -1.0;
             }
-            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
-            let rpm = 0;
-            let speed = 0;
-            let reverse = false;
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed * left;
-                    reverse = false;
-                } else {
-                    speed = thread.vm.hub.moveSpeed * left;
-                    reverse = true;
-                }
-                const options = { reverse: reverse, percent: speed, ignorePresetSpeed: true };
-                attachment.motor!.startMotor(options);
-                rpm = attachment.motor!.getRpm(options);
-            }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair2];
-            if (attachment && attachment.type == 'motor') {
-                if (thread.vm.hub.moveSpeed < 0) {
-                    speed = -thread.vm.hub.moveSpeed * right;
-                    reverse = true;
-                } else {
-                    speed = thread.vm.hub.moveSpeed * right;
-                    reverse = false;
-                }
-                const options = { reverse: reverse, percent: speed, ignorePresetSpeed: true };
-                attachment.motor!.startMotor(options);
-                if (attachment.motor!.getRpm(options) > rpm) {
-                    rpm = attachment.motor!.getRpm(options);
-                }
-            }
+            const rpm1 = this.startDriveMotor(thread, thread.vm.hub.movePair1, thread.vm.hub.moveSpeed * left);
+            const rpm2 = this.startDriveMotor(thread, thread.vm.hub.movePair2, thread.vm.hub.moveSpeed * right);
+            const rpm = Math.max(rpm1 ?? 0, rpm2 ?? 0);
             if (rpm && rpm > 0) {
                 if (unit == 'rotations') {
                     const revolution_time = 60.0 / rpm;
@@ -1113,7 +978,7 @@ export class ActionStatement extends Statement {
                     yield thread.vm.sleep(amount);
                 }
             }
-            attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
+            let attachment = thread.vm.hub.ports[thread.vm.hub.movePair1];
             if (attachment && attachment.type == 'motor') {
                 attachment.motor!.reverse = false;
                 attachment.motor!.stopMotor();
@@ -1773,10 +1638,13 @@ export class FunctionExpression extends Expression {
             return new NumberValue(attachment.measure.reflected * 100);
         } else if (this.opcode == 'flippermoresensors_acceleration') {
             const axis = this.arguments[0].evaluate(thread).getString();
-            return super.evaluate(thread);
+            if (axis == 'x') return new NumberValue(thread.vm.hub.accelerationX);
+            if (axis == 'z') return new NumberValue(thread.vm.hub.accelerationZ);
+            return new NumberValue(0);
         } else if (this.opcode == 'flippermoresensors_angularVelocity') {
             const axis = this.arguments[0].evaluate(thread).getString();
-            return super.evaluate(thread);
+            // The simulated robot moves on a flat X/Z plane, so yaw is its only rotation.
+            return new NumberValue(axis == 'z' ? thread.vm.hub.angularVelocity : 0);
         } else if (this.opcode == 'flippermoresensors_orientation') {
             return super.evaluate(thread);
         } else if (this.opcode == 'flippermoresensors_motion') {
@@ -2077,6 +1945,16 @@ export class Wheel {
     }
 }
 
+export interface MotorAttachment {
+    id: number;
+    port: PortType;
+    ratio: number;
+    axis: 'x' | 'y' | 'z';
+    /** Optional mechanical output-angle limits, in degrees from the loaded pose. */
+    minAngle?: number;
+    maxAngle?: number;
+}
+
 interface MotorOptions {
     percent: number;
     reverse?: boolean;
@@ -2288,6 +2166,7 @@ export interface HubPorts {
 }
 
 export class Hub {
+    driveForward: { x: number; z: number } | undefined = undefined;
     //67718
     //45601
     leftPressed: boolean;
@@ -2299,14 +2178,19 @@ export class Hub {
     eventHandler: HubEventHandler | undefined;
     buttonColour: string;
     wheels: Wheel[];
+    attachments: MotorAttachment[];
     moveSpeed: number;
     moveDistance: number; // in mm
     movePair1: PortType;
     movePair2: PortType;
     yaw: number;
+    accelerationX: number;
+    accelerationZ: number;
+    angularVelocity: number;
     id: string;
 
     reload() {
+        this.driveForward = undefined;
         this.leftPressed = false;
         this.rightPressed = false;
         this.screen = '0000000000000000000000000';
@@ -2321,12 +2205,16 @@ export class Hub {
             F: new Port('none')
         };
         this.wheels = [];
+        this.attachments = [];
         this.moveSpeed = 0;
         this.moveDistance = 175;
         this.movePair1 = 'A';
         this.movePair2 = 'B';
         this.screenRotate = 0;
         this.yaw = 0;
+        this.accelerationX = 0;
+        this.accelerationZ = 0;
+        this.angularVelocity = 0;
     }
 
     reset() {
@@ -2347,6 +2235,9 @@ export class Hub {
         this.movePair2 = 'B';
         this.screenRotate = 0;
         this.yaw = 0;
+        this.accelerationX = 0;
+        this.accelerationZ = 0;
+        this.angularVelocity = 0;
     }
 
     constructor() {
@@ -2365,12 +2256,16 @@ export class Hub {
             F: new Port('none')
         };
         this.wheels = [];
+        this.attachments = [];
         this.moveSpeed = 0;
         this.movePair1 = 'A';
         this.movePair2 = 'B';
         this.moveDistance = 175;
         this.screenRotate = 0;
         this.yaw = 0;
+        this.accelerationX = 0;
+        this.accelerationZ = 0;
+        this.angularVelocity = 0;
     }
 
     setEventHandler(eventHandler: HubEventHandler) {
@@ -2729,13 +2624,6 @@ export class Thread {
     }
 }
 
-function dist(a: Vertex, b: Vertex) {
-    const dx = a.x - b.x;
-    const dy = a.y - b.y;
-    const dz = a.z - b.z;
-    return Math.sqrt(dx * dx + dy * dy + dz * dz);
-}
-
 interface BroadcastWatcher {
     wait: boolean;
     threads: Thread[];
@@ -2758,6 +2646,8 @@ export class VM {
     first: boolean;
     timerStart: number;
     deltaTime: number;
+    velocityX: number;
+    velocityZ: number;
     wait: number;
     sleepTasks: SleepTask[];
 
@@ -2788,6 +2678,8 @@ export class VM {
         oscillator.connect(audioContext.destination);
         this.oscillator = oscillator;
         this.deltaTime = 0.0;
+        this.velocityX = 0;
+        this.velocityZ = 0;
         this.sleepTasks = [];
         this.wait = 0;
 
@@ -2952,6 +2844,22 @@ export class VM {
 
     alignWheelsToModel() {
         for (const wheel of this.hub.wheels) {
+            if (this.hub.driveForward) {
+                wheel.direction = { ...this.hub.driveForward, y: 0 };
+                continue;
+            }
+            // A tilted tire's axle can give the inferred travel vector a vertical
+            // component. Ground vehicles must only travel in the X/Z plane.
+            const horizontalLength = Math.hypot(wheel.direction.x, wheel.direction.z);
+            if (horizontalLength > 1e-6) {
+                wheel.direction = {
+                    x: wheel.direction.x / horizontalLength,
+                    y: 0,
+                    z: wheel.direction.z / horizontalLength
+                };
+            } else {
+                wheel.direction = { x: 0, y: 0, z: 1 };
+            }
             const xm = Math.abs(wheel.direction.x);
             const zm = Math.abs(wheel.direction.z);
             // Make sure wheels point the same direction
@@ -3006,9 +2914,19 @@ export class VM {
 
     step(seconds: number, scene: SceneStore) {
         if (this.state == 'running') {
+            const startX = scene.robot.position?.x ?? 0;
+            const startZ = scene.robot.position?.z ?? 0;
+            const startYaw = this.hub.yaw;
+            const previousVelocityX = this.velocityX;
+            const previousVelocityZ = this.velocityZ;
             let duration = seconds * timeFactor + this.deltaTime;
             if (this.wait >= duration) {
                 this.wait -= duration;
+                this.velocityX = 0;
+                this.velocityZ = 0;
+                this.hub.accelerationX = 0;
+                this.hub.accelerationZ = 0;
+                this.hub.angularVelocity = 0;
                 return;
             }
             while (duration > 0.0) {
@@ -3019,6 +2937,18 @@ export class VM {
                 duration -= stepTime;
             }
             this.deltaTime = duration;
+            const elapsed = seconds * timeFactor;
+            if (elapsed > 0) {
+                this.velocityX = ((scene.robot.position?.x ?? 0) - startX) / elapsed;
+                this.velocityZ = ((scene.robot.position?.z ?? 0) - startZ) / elapsed;
+                // Positions are millimetres; report acceleration in metres per second squared.
+                this.hub.accelerationX = (this.velocityX - previousVelocityX) / elapsed / 1000;
+                this.hub.accelerationZ = (this.velocityZ - previousVelocityZ) / elapsed / 1000;
+                let yawDelta = this.hub.yaw - startYaw;
+                if (yawDelta > 180) yawDelta -= 360;
+                if (yawDelta < -180) yawDelta += 360;
+                this.hub.angularVelocity = yawDelta / elapsed;
+            }
         }
     }
 
@@ -3029,7 +2959,33 @@ export class VM {
             return wheelsMoved;
         }
         // angle is 0 for no movement to 1 for a full revolution
-        const angle = attachment.motor!.move(seconds);
+        const motor = attachment.motor!;
+        const before = motor.relativePosition;
+        const requestedAngle = motor.move(seconds);
+        const limitedAttachments = this.hub.attachments.filter((part) =>
+            part.port === port && Number.isFinite(part.minAngle) && Number.isFinite(part.maxAngle)
+            && Math.abs(part.ratio) > 1e-9
+        );
+        let angle = requestedAngle;
+        if (limitedAttachments.length > 0 && requestedAngle !== 0) {
+            let lower = Number.NEGATIVE_INFINITY;
+            let upper = Number.POSITIVE_INFINITY;
+            for (const part of limitedAttachments) {
+                const first = (part.minAngle as number) / part.ratio;
+                const second = (part.maxAngle as number) / part.ratio;
+                lower = Math.max(lower, Math.min(first, second));
+                upper = Math.min(upper, Math.max(first, second));
+            }
+            if (lower <= upper) {
+                const allowed = Math.max(lower, Math.min(upper, motor.relativePosition));
+                if (Math.abs(allowed - motor.relativePosition) > 1e-9) {
+                    motor.relativePosition = allowed;
+                    motor.position = ((allowed % 360) + 360) % 360;
+                    motor.stopMotor();
+                    angle = (allowed - before) / 360;
+                }
+            }
+        }
         for (const wheel of this.hub.wheels) {
             if (wheel.port == port) {
                 wheel.distanceMoved = wheel.gearing * angle * (wheel.radius * 2.0 * Math.PI);
@@ -3043,171 +2999,52 @@ export class VM {
     }
 
     moveRobot(seconds: number, scene: SceneStore) {
-        const wheelsMoved = [];
-        if (this.hub.wheels.length == 0) {
-            return;
-        }
         for (const wheel of this.hub.wheels) {
             wheel.distanceMoved = 0.0;
         }
-        wheelsMoved.push(...this.turnMotor('A', seconds));
-        wheelsMoved.push(...this.turnMotor('B', seconds));
-        wheelsMoved.push(...this.turnMotor('C', seconds));
-        wheelsMoved.push(...this.turnMotor('D', seconds));
-        wheelsMoved.push(...this.turnMotor('E', seconds));
-        wheelsMoved.push(...this.turnMotor('F', seconds));
-        //TODO: Check if wheels are aligned, moving in the same direction
-        if (wheelsMoved.length == 1) {
-            const direction = m4.transformVector(
-                m4.yRotation((scene.robot.rotation! * Math.PI) / 180.0),
-                [
-                    wheelsMoved[0].direction.x,
-                    wheelsMoved[0].direction.y,
-                    wheelsMoved[0].direction.z,
-                    0.0
-                ]
-            );
-            scene.robot.position!.x += wheelsMoved[0].distanceMoved * direction[0];
-            scene.robot.position!.y += wheelsMoved[0].distanceMoved * direction[1];
-            scene.robot.position!.z += wheelsMoved[0].distanceMoved * direction[2];
-        } else if (wheelsMoved.length == 2) {
-            let d0 = wheelsMoved[0].distanceMoved;
-            let d1 = wheelsMoved[1].distanceMoved;
-            let p0 = wheelsMoved[0].position;
-            let p1 = wheelsMoved[1].position;
-            if (d0 * d1 > 0) {
-                // same direction find an extended line to the center
-                // and rotate
-                let reverse = d0 < 0;
-                d0 = Math.abs(d0);
-                d1 = Math.abs(d1);
-                if (d0 > d1) {
-                    const td = d0;
-                    d0 = d1;
-                    d1 = td;
-                    const tp = p0;
-                    p0 = p1;
-                    p1 = tp;
-                    reverse = !reverse;
-                }
+        for (const port of allPorts) this.turnMotor(port, seconds);
+        if (this.hub.wheels.length !== 2 || !scene.robot.position) return;
 
-                if ((d1 - d0) * (d1 - d0) < 1e-3) {
-                    // Very close in distance, just move straight
-                    const direction = m4.transformVector(
-                        m4.yRotation((scene.robot.rotation! * Math.PI) / 180.0),
-                        [
-                            wheelsMoved[0].direction.x,
-                            wheelsMoved[0].direction.y,
-                            wheelsMoved[0].direction.z,
-                            0.0
-                        ]
-                    );
-                    scene.robot.position!.x += wheelsMoved[0].distanceMoved * direction[0];
-                    scene.robot.position!.y += wheelsMoved[0].distanceMoved * direction[1];
-                    scene.robot.position!.z += wheelsMoved[0].distanceMoved * direction[2];
-                } else {
-                    const r1 = dist(p0, p1);
-                    const r0 = (r1 * d0) / (d1 - d0);
-                    const t = r0 + r1;
-                    const c: Vertex = {
-                        x: (t * (p0.x - p1.x)) / r1,
-                        y: (t * (p0.y - p1.y)) / r1,
-                        z: (t * (p0.z - p1.z)) / r1
-                    };
-                    // c is the rotation point. The angle is given by rsin(a) = t, rcos(a) = d1;
-                    // But we can actually use arc length so that the angle a=d1/t (radians);
-                    const angle = reverse ? -d1 / t : d1 / t;
-                    let matrix = m4.translation(
-                        scene.robot.position!.x,
-                        scene.robot.position!.y,
-                        scene.robot.position!.z
-                    );
-                    matrix = m4.yRotate(matrix, (scene.robot.rotation! * Math.PI) / 180.0);
-                    matrix = m4.translate(matrix, +c.x, +c.y, +c.z);
-                    matrix = m4.yRotate(matrix, angle);
-                    matrix = m4.translate(matrix, -c.x, -c.y, -c.z);
-                    const position = m4.transformVector(matrix, [0, 0, 0, 1]);
-                    scene.robot.position!.x = position[0];
-                    scene.robot.position!.y = position[1];
-                    scene.robot.position!.z = position[2];
-                    scene.robot.rotation! += (angle * 180.0) / Math.PI;
-                    this.hub.yaw -= (angle * 180.0) / Math.PI;
-                    // hubs yaw is -180 to 180
-                    while (this.hub.yaw >= 180.0) {
-                        this.hub.yaw -= 360.0;
-                    }
-                    while (this.hub.yaw < -180.0) {
-                        this.hub.yaw += 360.0;
-                    }
-                    while (scene.robot.rotation! >= 360.0) {
-                        scene.robot.rotation! -= 360.0;
-                    }
-                    while (scene.robot.rotation! < 0.0) {
-                        scene.robot.rotation! += 360.0;
-                    }
-                }
-            } else {
-                // opposite directions.
-                // Compute a point c between the points to rotate around
-                let reverse = d0 > 0;
-                if (Math.abs(d0) > Math.abs(d1)) {
-                    reverse = d0 > 0;
-                } else {
-                    reverse = d1 < 0;
-                }
-                d0 = Math.abs(d0);
-                d1 = Math.abs(d1);
-                if (d0 + d1 < 1e-3) {
-                    return;
-                }
-                const t = dist(p0, p1);
-                const r0 = (t * d0) / (d0 + d1);
-                const r1 = t - r0;
-                const s = 1.0 - r0 / t;
-                const c: Vertex = {
-                    x: s * p0.x + (1.0 - s) * p1.x,
-                    y: s * p0.y + (1.0 - s) * p1.y,
-                    z: s * p0.z + (1.0 - s) * p1.z
-                };
-                // c is the rotation point. The angle to rotate is d0 /r0 or d1/r1
-                let angle = 0;
-                if (r0 > r1) {
-                    angle = d0 / r0;
-                } else {
-                    angle = d1 / r1;
-                }
-                if (reverse) {
-                    angle = -angle;
-                }
-                let matrix = m4.translation(
-                    scene.robot.position!.x,
-                    scene.robot.position!.y,
-                    scene.robot.position!.z
-                );
-                matrix = m4.yRotate(matrix, (scene.robot.rotation! * Math.PI) / 180.0);
-                matrix = m4.translate(matrix, +c.x, +c.y, +c.z);
-                matrix = m4.yRotate(matrix, angle);
-                matrix = m4.translate(matrix, -c.x, -c.y, -c.z);
-                const position = m4.transformVector(matrix, [0, 0, 0, 1]);
-                scene.robot.position!.x = position[0];
-                scene.robot.position!.y = position[1];
-                scene.robot.position!.z = position[2];
-                scene.robot.rotation! += (angle * 180.0) / Math.PI;
-                this.hub.yaw -= (angle * 180.0) / Math.PI;
-                // hubs yaw is -180 to 180
-                while (this.hub.yaw >= 180.0) {
-                    this.hub.yaw -= 360.0;
-                }
-                while (this.hub.yaw < -180.0) {
-                    this.hub.yaw += 360.0;
-                }
-                while (scene.robot.rotation! >= 360.0) {
-                    scene.robot.rotation! -= 360.0;
-                }
-                while (scene.robot.rotation! < 0.0) {
-                    scene.robot.rotation! += 360.0;
-                }
-            }
-        }
+        // Differential drive: an unpowered wheel remains stationary; it does
+        // not make the powered wheel translate the whole chassis in a line.
+        const forward = this.hub.wheels[0].direction;
+        const lateral = (wheel: Wheel) => wheel.position.x * forward.z - wheel.position.z * forward.x;
+        // A/B are the canonical SPIKE drive pair in the bundled robots and in
+        // the default workspace. Keep their semantic left/right meaning even
+        // though the gear-facing back camera mirrors the model X axis. Custom
+        // port pairs still fall back to geometry.
+        const portA = this.hub.wheels.find((wheel) => wheel.port === 'A');
+        const portB = this.hub.wheels.find((wheel) => wheel.port === 'B');
+        const [left, right] = portA && portB
+            ? [portA, portB]
+            : [...this.hub.wheels].sort((a, b) => lateral(a) - lateral(b));
+        const rightwardDelta = {
+            x: right.position.x - left.position.x,
+            z: right.position.z - left.position.z
+        };
+        const track = Math.hypot(rightwardDelta.x, rightwardDelta.z);
+        if (track < 1e-6) return;
+        const travel = (left.distanceMoved + right.distanceMoved) / 2;
+        // Positive left-wheel travel and negative right-wheel travel is a
+        // right/clockwise tank turn from the gear-facing back view. Derive the
+        // signed yaw from the actual A-to-B lateral axis instead of assuming
+        // that model-X increasing is visible-right after the back-camera flip.
+        const turn = (right.distanceMoved - left.distanceMoved) / track;
+        if (Math.abs(travel) < 1e-9 && Math.abs(turn) < 1e-9) return;
+
+        const rightward = {
+            x: rightwardDelta.x / track,
+            z: rightwardDelta.z / track
+        };
+        const arcForward = Math.abs(turn) < 1e-9 ? travel : (travel / turn) * Math.sin(turn);
+        const arcRight = Math.abs(turn) < 1e-9 ? 0 : (travel / turn) * (1 - Math.cos(turn));
+        const localX = forward.x * arcForward + rightward.x * arcRight;
+        const localZ = forward.z * arcForward + rightward.z * arcRight;
+        const heading = (scene.robot.rotation ?? 0) * Math.PI / 180;
+        const rotated = m4.transformVector(m4.yRotation(heading), [localX, 0, localZ, 0]);
+        scene.robot.position.x += rotated[0];
+        scene.robot.position.z += rotated[2];
+        scene.robot.rotation = (((scene.robot.rotation ?? 0) + turn * 180 / Math.PI) % 360 + 360) % 360;
+        this.hub.yaw = ((this.hub.yaw - turn * 180 / Math.PI + 180) % 360 + 360) % 360 - 180;
     }
 }

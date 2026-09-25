@@ -15,6 +15,8 @@ export interface SceneObject {
     rotation?: number;
     name: string;
     compiled?: CompiledModel;
+    /** Size of a lightweight placeholder used by bundled practice fields. */
+    displaySize?: { width: number; height: number; depth: number };
 }
 
 export interface SceneStore {
@@ -40,7 +42,8 @@ function copyObject(obj: SceneObject): SceneObject {
         position: obj.position ? { ...obj.position } : { x: 0, y: 0, z: 0 },
         rotation: obj.rotation ?? 0,
         name: obj.name,
-        compiled: obj.compiled
+        compiled: obj.compiled,
+        displaySize: obj.displaySize ? { ...obj.displaySize } : undefined
     };
 }
 

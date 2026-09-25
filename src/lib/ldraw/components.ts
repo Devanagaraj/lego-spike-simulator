@@ -70,6 +70,7 @@ export interface Subpart {
     colour: BrickColour;
     port?: PortConnection;
     gear_ratio?: number;
+    rotation_axis?: 'x' | 'y' | 'z';
     matrix: Matrix;
     model: Model | undefined;
     modelNumber: string;
@@ -395,6 +396,9 @@ export function saveMPD(model: Model) {
             if (subpart.gear_ratio) {
                 content.push(`0 !SPIKE_GEARING ${-subpart.gear_ratio}`);
             }
+            if (subpart.rotation_axis) {
+                content.push(`0 !SPIKE_ROTATE ${subpart.rotation_axis}`);
+            }
             // eslint-disable-next-line @typescript-eslint/no-unused-vars
             const [a, d, g, zero1, b, e, h, zero2, c, f, i, zero3, x, y, z, one] = subpart.matrix;
             const sname = subpart.modelNumber;
@@ -421,6 +425,7 @@ export function loadModel(name: string, content: string): Model {
     let lastPort: string | undefined = undefined;
     let lastHub: string | undefined = undefined;
     let lastGearRatio: string | undefined = undefined;
+    let lastAxis: 'x' | 'y' | 'z' | undefined = undefined;
     const model: Model = {
         name: name,
         subparts: [],
@@ -460,6 +465,9 @@ export function loadModel(name: string, content: string): Model {
                 lastHub = parts[2];
                 lastPort = parts[3];
             }
+            if (parts[1] == '!SPIKE_ROTATE' && ['x', 'y', 'z'].includes(parts[2])) {
+                lastAxis = parts[2] as 'x' | 'y' | 'z';
+            }
         } else if (parts[0] == '1') {
             // subpart
             const colour = parts[1];
@@ -489,11 +497,13 @@ export function loadModel(name: string, content: string): Model {
             if (lastGearRatio) {
                 entry.gear_ratio = -lastGearRatio;
             }
+            if (lastAxis) entry.rotation_axis = lastAxis;
             model.subparts.push(entry);
             resolveSubpart(entry);
             lastPort = undefined;
             lastHub = undefined;
             lastGearRatio = undefined;
+            lastAxis = undefined;
         } else if (parts[0] == '2') {
             // line
             const colour = parts[1];
@@ -754,6 +764,7 @@ export function clearPorts(model: Model | undefined) {
     for (const subpart of model.subparts) {
         subpart.port = undefined;
         subpart.gear_ratio = undefined;
+        subpart.rotation_axis = undefined;
         clearPorts(subpart.model);
     }
 }
@@ -793,6 +804,17 @@ export function setGearRatio(model: Model | undefined, ratio: number, id: number
             subpart.gear_ratio = ratio;
         } else {
             setGearRatio(subpart.model, ratio, id);
+        }
+    }
+}
+
+export function setRotationAxis(model: Model | undefined, axis: 'x' | 'y' | 'z', id: number) {
+    if (!model) return;
+    for (const subpart of model.subparts) {
+        if (subpart.id === id) {
+            subpart.rotation_axis = axis;
+        } else {
+            setRotationAxis(subpart.model, axis, id);
         }
     }
 }
