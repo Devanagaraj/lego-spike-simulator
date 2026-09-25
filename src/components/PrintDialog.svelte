@@ -23,6 +23,7 @@
     backdropClass="fixed inset-0 z-[80] bg-gray-900 bg-opacity-50 dark:bg-opacity-80"
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[90] w-full p-4 flex"
     title="Print code"
+    outsideclose={true}
     bind:open={modalOpen}
 >
     <div class="flex flex-col gap-2 items-center">

@@ -8,6 +8,8 @@
         type PartMatch
     } from '$lib/ldraw/components';
     import { type PortType, Hub, Wheel } from '$lib/spike/vm';
+    import { saveRobotToBrowser } from '$lib/robot-cache';
+    import { sceneStore } from '$lib/spike/scene';
     import { type CompiledModel, WebGLCompiler } from '$lib/ldraw/gl';
     import HubWidget from '$components/HubWidget.svelte';
     import RobotPreview from '$components/RobotPreview.svelte';
@@ -20,14 +22,23 @@
 
     export let modalOpen = false;
     export let hub: Hub;
-    const matchCodes = ['39367p01', '49295p01'];
+    const matchCodes = ['32019', '39367p01', '49295p01'];
     const partNames: Record<string, string> = {
+        '32019': 'Tire 62.4 × 20 mm',
         '39367p01': 'Wheel', // Diameter 56mm
         '49295p01': 'Large Wheel' // Diameter 88mm
     };
     const partRadius: Record<string, number> = {
+        '32019': 31.2,
         '39367p01': 28,
         '49295p01': 44
+    };
+    const motorCodes = ['54696', '54696p01', '68488', '54675'];
+    const motorNames: Record<string, string> = {
+        '54696': 'Medium motor',
+        '54696p01': 'Medium motor',
+        '68488': 'Small motor',
+        '54675': 'Large motor'
     };
     let compiledRobot: CompiledModel | undefined = undefined;
     let compiler = new WebGLCompiler();
@@ -35,10 +46,10 @@
     let parts: PartMatch[] = findParts($componentStore.robotModel, matchCodes);
     let wheels: WheelMatch[] = getWheels(parts, hub);
     let selectedWheel: number = -1;
-    let selectedMotor: number = -1;
     let selected: number[] = [];
     let gearing = 1;
     let radius = 0;
+    let gearInfoOpen = false;
 
     function getWheels(parts: PartMatch[], hub: Hub) {
         const wheels: WheelMatch[] = [];
@@ -61,28 +72,29 @@
             port = undefined;
         }
 
-        if (port) {
-            const portModel = hub.ports[port];
-            if (portModel.type == 'motor') {
-                const id = portModel.id();
-                if (id == 'none') {
-                    selectedMotor = -1;
-                } else {
-                    selectedMotor = id;
-                }
-            } else {
-                selectedMotor = -1;
-            }
-        } else {
-            selectedMotor = -1;
+        selected = [selectedWheel];
+    }
+
+    function handleCardKey(event: KeyboardEvent, id: number, part: string) {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            select(id, part);
         }
-        selected = [selectedWheel, selectedMotor];
+    }
+
+    function motorLabel(wheel: Wheel | undefined) {
+        if (!wheel) return 'Motor: none';
+        const motor = hub.ports[wheel.port]?.motor;
+        if (!motor) return `Motor: none (Port ${wheel.port})`;
+        const match = findParts($componentStore.robotModel, motorCodes).find((part) => part.id === motor.id);
+        return `Motor: ${match ? motorNames[match.part] : 'motor'} · Port ${wheel.port}`;
     }
 
     function attach(toPort: PortType | undefined) {
         if (selectedWheel == -1) {
             return;
         }
+        if (toPort && hub.ports[toPort].type !== 'motor') return;
         if (toPort) {
             port = toPort;
             let wheel = hub.wheels.find((w) => w.id == selectedWheel);
@@ -93,7 +105,6 @@
                 if (result) {
                     let matrix = m4.identity();
                     if (compiledRobot) {
-                        matrix = m4.translate(matrix, 0.0, compiledRobot.bbox.min.y, 0.0);
                         matrix = m4.translate(
                             matrix,
                             compiledRobot.recenter.x,
@@ -116,18 +127,11 @@
                     wheels = wheels;
                 }, 0);
             }
-            const portModel = hub.ports[port];
-            if (portModel.type == 'motor') {
-                const id = portModel.id();
-                if (id == 'none') {
-                    selectedMotor = -1;
-                } else {
-                    selectedMotor = id;
-                }
-            } else {
-                selectedMotor = -1;
-            }
-            selected = [selectedWheel, selectedMotor];
+            selected = [selectedWheel];
+            hub = hub;
+            void saveRobotToBrowser($componentStore.robotModel, hub, $sceneStore.robot.name).catch(
+                (error) => console.warn('Could not cache wheel selection', error)
+            );
         }
     }
 
@@ -139,6 +143,10 @@
         if (match && match.wheel) {
             match.wheel.gearing = gearing;
             wheels = wheels;
+            hub = hub;
+            void saveRobotToBrowser($componentStore.robotModel, hub, $sceneStore.robot.name).catch(
+                (error) => console.warn('Could not cache wheel gearing', error)
+            );
         }
     }
 
@@ -160,6 +168,7 @@
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[90] w-full p-4 flex"
     title="Connect wheels"
     size="xl"
+    outsideclose={true}
     bind:open={modalOpen}
 >
     <div class="flex flex-row gap-2 h-[75dvh] overflow-hidden">
@@ -175,42 +184,77 @@
             />
             <div class="flex flex-col gap-2">
                 <span class="mb-2"
-                    >Select the wheel to change, and then click on the port with the motor that
-                    drives the wheel, and enter gear ratio. A negative gear ratio will cause the
-                    wheel to turn in reverse.</span
+                    >Select a wheel, click the port of its driving motor, and enter the ratio. The
+                    ratio is wheel revolutions per motor revolution; a negative value reverses the
+                    wheel. Defaults: A = 1 and B = -1.</span
                 >
                 {#each wheels as wheel}
                     {#if selectedWheel == wheel.part.id}
-                        <button
-                            class="rounded-xl p-4 border border-gray-400 bg-green-100 flex flex-col items-start w-full h-32"
+                        <div
+                            class="relative rounded-xl p-4 border border-gray-400 bg-green-100 flex flex-col items-start w-full min-h-32"
+                            role="button"
+                            tabindex="0"
                             on:click={() => select(wheel.part.id, wheel.part.part)}
+                            on:keydown={(event) => handleCardKey(event, wheel.part.id, wheel.part.part)}
                         >
                             <span>{partNames[wheel.part.part]}</span>
                             <span class="ml-6 text-sm text-black"
                                 >Port: {wheel.wheel?.port ?? ''}</span
                             >
+                            <span class="ml-6 text-sm text-black">{motorLabel(wheel.wheel)}</span>
                             <div class="pl-6 flex flex-row items-center gap-2 w-full">
                                 <span class="text-sm text-black">Gear ratio:</span>
+                                <button
+                                    type="button"
+                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-500 text-xs font-bold leading-none"
+                                    aria-label="Explain wheel gear ratio"
+                                    aria-expanded={gearInfoOpen}
+                                    title="What does gear ratio mean?"
+                                    on:click|stopPropagation={() => (gearInfoOpen = !gearInfoOpen)}>i</button
+                                >
                                 <Input
                                     class="flex-1 my-0 py-2"
                                     bind:value={gearing}
                                     on:change={() => updateGearing()}
                                 />
                             </div>
-                        </button>
+                            {#if gearInfoOpen}
+                                <div class="mt-1 rounded border bg-blue-50 p-2 text-left text-xs text-gray-700">
+                                    A ratio of 1 means one wheel revolution per motor revolution.
+                                    -1 reverses the wheel direction; 2 doubles wheel speed/travel;
+                                    0.5 halves it. The default A=1/B=-1 values compensate for the
+                                    mirrored wheel axles. Torque is not simulated.
+                                </div>
+                            {/if}
+                        </div>
                     {:else}
-                        <button
-                            class="rounded-xl p-4 border border-gray-400 flex flex-col items-start h-32"
+                        <div
+                            class="rounded-xl p-4 border border-gray-400 flex flex-col items-start min-h-32"
+                            role="button"
+                            tabindex="0"
                             on:click={() => select(wheel.part.id, wheel.part.part)}
+                            on:keydown={(event) => handleCardKey(event, wheel.part.id, wheel.part.part)}
                         >
                             <span>{partNames[wheel.part.part]}</span>
                             <span class="ml-6 text-sm text-black"
                                 >Port: {wheel.wheel?.port ?? ''}</span
                             >
-                            <span class="ml-6 mt-0.5 text-sm text-black py-2"
-                                >Gear ratio: {wheel.wheel?.gearing ?? ''}</span
-                            >
-                        </button>
+                            <span class="ml-6 text-sm text-black">{motorLabel(wheel.wheel)}</span>
+                            <div class="ml-6 mt-0.5 flex items-center gap-2 py-2 text-sm text-black">
+                                <span>Gear ratio: {wheel.wheel?.gearing ?? ''}</span>
+                                <button
+                                    type="button"
+                                    class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-gray-500 text-xs font-bold leading-none"
+                                    aria-label="Explain wheel gear ratio"
+                                    aria-expanded={gearInfoOpen}
+                                    title="What does gear ratio mean?"
+                                    on:click|stopPropagation={() => (gearInfoOpen = !gearInfoOpen)}>i</button
+                                >
+                            </div>
+                            {#if gearInfoOpen}
+                                <span class="ml-6 mt-1 rounded border bg-blue-50 p-1 text-left text-xs text-gray-700">Wheel revolutions per motor revolution. Negative reverses direction. Default A=1/B=-1.</span>
+                            {/if}
+                        </div>
                     {/if}
                 {/each}
             </div>

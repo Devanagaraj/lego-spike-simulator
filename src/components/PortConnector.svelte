@@ -1,9 +1,11 @@
 <script lang="ts">
     import { Modal, Radio } from 'flowbite-svelte';
     import { componentStore, findParts, type PartMatch } from '$lib/ldraw/components';
+    import { saveRobotToBrowser } from '$lib/robot-cache';
+    import { assignDevicePort } from '$lib/spike/connections';
+    import { sceneStore } from '$lib/spike/scene';
     import {
         type PortType,
-        allPorts,
         Hub,
         Port,
         Motor,
@@ -44,41 +46,42 @@
         if (e.target) {
             const radio = e.target as HTMLInputElement;
             if (radio.value === 'none') {
-                hub.ports[port] = new Port('none');
+                assignDevicePort(hub, port, new Port('none'));
                 selected = -1;
             } else {
                 const match = parts.find((x) => x.id.toString() === radio.value);
                 if (match) {
                     selected = match.id;
-                    for (const p of allPorts) {
-                        if (match.id == hub.ports[p].id()) {
-                            hub.ports[p] = new Port('none');
-                        }
-                    }
+                    let device: Port | undefined;
                     if (match.part == '54696') {
-                        hub.ports[port] = new Port('motor');
-                        hub.ports[port].motor = new Motor(match.id);
+                        device = new Port('motor');
+                        device.motor = new Motor(match.id);
                     } else if (match.part == '54696p01') {
-                        hub.ports[port] = new Port('motor');
-                        hub.ports[port].motor = new Motor(match.id);
+                        device = new Port('motor');
+                        device.motor = new Motor(match.id);
                     } else if (match.part == '68488') {
-                        hub.ports[port] = new Port('motor');
-                        hub.ports[port].motor = new Motor(match.id);
+                        device = new Port('motor');
+                        device.motor = new Motor(match.id);
                     } else if (match.part == '54675') {
-                        hub.ports[port] = new Port('motor');
-                        hub.ports[port].motor = new Motor(match.id);
+                        device = new Port('motor');
+                        device.motor = new Motor(match.id);
                     } else if (match.part == '37308') {
-                        hub.ports[port] = new Port('light');
-                        hub.ports[port].light = new LightSensor(match.id);
+                        device = new Port('light');
+                        device.light = new LightSensor(match.id);
                     } else if (match.part == '37316') {
-                        hub.ports[port] = new Port('distance');
-                        hub.ports[port].ultra = new UltraSoundSensor(match.id);
+                        device = new Port('distance');
+                        device.ultra = new UltraSoundSensor(match.id);
                     } else if (match.part == '37312') {
-                        hub.ports[port] = new Port('force');
-                        hub.ports[port].force = new ForceSensor(match.id);
+                        device = new Port('force');
+                        device.force = new ForceSensor(match.id);
                     }
+                    if (device) assignDevicePort(hub, port, device);
                 }
             }
+            hub = hub;
+            void saveRobotToBrowser($componentStore.robotModel, hub, $sceneStore.robot.name).catch(
+                (error) => console.warn('Could not cache motor selection', error)
+            );
         }
     }
 
@@ -94,6 +97,7 @@
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[90] w-full p-4 flex"
     title="Connect robot ports"
     size="xl"
+    outsideclose={true}
     bind:open={modalOpen}
 >
     <div class="flex flex-row gap-2 h-[75dvh] overflow-hidden">

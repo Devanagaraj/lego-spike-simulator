@@ -14,6 +14,7 @@
     import Menu from '$components/Menu.svelte';
     import { type MenuAction, type MenuEntry } from '$components/Menu.svelte';
     import JSZip from 'jszip';
+    import bioglowWireframeUrl from '$lib/assets/scenes/bioglow-wireframe.jpg?url';
 
     export let modalOpen = false;
     let numberOfLoads = 0;
@@ -29,6 +30,15 @@
     let customSizeVisible = false;
     let customHeight = 1000;
     let customWidth = 1000;
+    let startPositionVisible = false;
+    let startX = 0;
+    // The renderer calls the mat's second axis Z; the scene panel presents it
+    // as Y so users can position the robot with familiar X/Y coordinates.
+    let startY = 0;
+    let startHeading = 0;
+    const ROBOT_MOVE_STEP = 25;
+    const DEFAULT_ROBOT_X = -900;
+    const DEFAULT_ROBOT_Y = 430;
 
     let menu = prepareMenu(rotate, tilt, camera, select, $sceneStore);
     $: menu = prepareMenu(rotate, tilt, camera, select, $sceneStore);
@@ -131,6 +141,116 @@
         });
     }
 
+    function openStartPosition() {
+        const position = $sceneStore.robot.position ?? { x: 0, y: 0, z: 0 };
+        startX = position.x;
+        startY = position.z;
+        startHeading = $sceneStore.robot.rotation ?? 0;
+        startPositionVisible = true;
+    }
+
+    function hideStartPosition() {
+        startPositionVisible = false;
+    }
+
+    function updateStartCoordinates() {
+        const xLimit = Math.max(0, $sceneStore.mapWidth / 2 - 80);
+        const yLimit = Math.max(0, $sceneStore.mapHeight / 2 - 80);
+        startX = Math.max(-xLimit, Math.min(xLimit, Number(startX) || 0));
+        startY = Math.max(-yLimit, Math.min(yLimit, Number(startY) || 0));
+        sceneStore.update((old) => ({
+            ...old,
+            robot: {
+                ...old.robot,
+                position: { ...(old.robot.position ?? { x: 0, y: 0, z: 0 }), x: startX, z: startY }
+            }
+        }));
+    }
+
+    function setStartPosition() {
+        const xLimit = Math.max(0, $sceneStore.mapWidth / 2 - 80);
+        const zLimit = Math.max(0, $sceneStore.mapHeight / 2 - 80);
+        const x = Math.max(-xLimit, Math.min(xLimit, Number(startX) || 0));
+        const z = Math.max(-zLimit, Math.min(zLimit, Number(startY) || 0));
+        const heading = Number(startHeading) || 0;
+        sceneStore.update((old) => ({
+            ...old,
+            robot: {
+                ...old.robot,
+                position: { ...(old.robot.position ?? { x: 0, y: 0, z: 0 }), x, z },
+                rotation: heading
+            }
+        }));
+        startPositionVisible = false;
+    }
+
+    function placeRobotFromMap(event: CustomEvent<{ x: number; z: number }>) {
+        const xLimit = Math.max(0, $sceneStore.mapWidth / 2 - 80);
+        const zLimit = Math.max(0, $sceneStore.mapHeight / 2 - 80);
+        startX = Math.max(-xLimit, Math.min(xLimit, event.detail.x));
+        startY = Math.max(-zLimit, Math.min(zLimit, event.detail.z));
+        sceneStore.update((old) => ({
+            ...old,
+            robot: {
+                ...old.robot,
+                position: { ...(old.robot.position ?? { x: 0, y: 0, z: 0 }), x: startX, z: startY },
+                rotation: Number(startHeading) || 0
+            }
+        }));
+    }
+
+    function updateStartHeading() {
+        sceneStore.update((old) => ({
+            ...old,
+            robot: { ...old.robot, rotation: Number(startHeading) || 0 }
+        }));
+    }
+
+    function moveRobotOnMat(deltaX: number, deltaY: number) {
+        const xLimit = Math.max(0, $sceneStore.mapWidth / 2 - 80);
+        const yLimit = Math.max(0, $sceneStore.mapHeight / 2 - 80);
+        sceneStore.update((old) => {
+            const position = old.robot.position ?? { x: 0, y: 0, z: 0 };
+            const x = Math.max(-xLimit, Math.min(xLimit, position.x + deltaX));
+            const z = Math.max(-yLimit, Math.min(yLimit, position.z + deltaY));
+            return {
+                ...old,
+                robot: { ...old.robot, position: { ...position, x, z } }
+            };
+        });
+    }
+
+    function resetRobotPosition() {
+        const xLimit = Math.max(0, $sceneStore.mapWidth / 2 - 80);
+        const yLimit = Math.max(0, $sceneStore.mapHeight / 2 - 80);
+        const x = Math.max(-xLimit, Math.min(xLimit, DEFAULT_ROBOT_X));
+        const z = Math.max(-yLimit, Math.min(yLimit, DEFAULT_ROBOT_Y));
+        sceneStore.update((old) => ({
+            ...old,
+            robot: {
+                ...old.robot,
+                position: { ...(old.robot.position ?? { x: 0, y: 0, z: 0 }), x, z },
+                rotation: old.robot.rotation ?? 0
+            }
+        }));
+    }
+
+    async function loadWireframeMap() {
+        const response = await fetch(bioglowWireframeUrl);
+        if (!response.ok) return;
+        const map = await response.blob();
+        mapFile = map;
+        sceneStore.update((old) => ({
+            ...old,
+            map,
+            mapWidth: 2360,
+            mapHeight: 1140,
+            objects: []
+        }));
+        setSelected('#map');
+        numberOfLoads++;
+    }
+
     function setCustomMapSize() {
         customWidth = $sceneStore.mapWidth;
         customHeight = $sceneStore.mapHeight;
@@ -212,10 +332,17 @@
         menu.push({
             name: 'Load',
             actions: [
+                { name: 'FLL BIOGLOW wire map', action: () => void loadWireframeMap() },
                 { name: 'Load mat', action: () => loadBackgroundMap() },
                 { name: 'Load object', action: () => loadObject() },
                 { name: 'Load full scene', action: () => loadScene() },
                 { name: 'Load missing parts', action: () => loadLibrary() }
+            ]
+        });
+        menu.push({
+            name: 'Robot start',
+            actions: [
+                { name: 'Choose position and heading…', action: () => openStartPosition() }
             ]
         });
         menu.push({
@@ -426,6 +553,7 @@
                             position: obj.position,
                             rotation: obj.rotation,
                             name: obj.name,
+                            displaySize: obj.displaySize,
                             bricks: model
                         });
                     } else {
@@ -433,7 +561,8 @@
                             anchored: obj.anchored,
                             position: obj.position,
                             rotation: obj.rotation,
-                            name: obj.name
+                            name: obj.name,
+                            displaySize: obj.displaySize
                         });
                     }
                 }
@@ -637,6 +766,7 @@
     dialogClass="fixed top-0 start-0 end-0 h-modal md:inset-0 md:h-full z-[90] w-full p-4 flex"
     title="Scene editor"
     size="xl"
+    outsideclose={true}
     bind:open={modalOpen}
 >
     <div class="flex flex-col gap-1 h-[75dvh] relative overflow-hidden">
@@ -690,7 +820,80 @@
                         </div>
                     </div>
                 </div>
-                {#if select && select !== '#map' && select !== '#all'}
+                <div class="pointer-events-none absolute left-0 top-0 z-20 h-full w-full bg-black/20" hidden={!startPositionVisible}>
+                    {#if startPositionVisible}
+                        <div class="flex flex-row justify-around items-center h-full">
+                            <div class="pointer-events-auto bg-white rounded-xl p-4 flex flex-col shadow gap-3 min-w-80">
+                                <h2 class="text-lg font-semibold">Robot start on mat</h2>
+                                <p class="text-sm text-gray-600">Drag on the top view to place the robot. Use the 3D preview and heading control to set its orientation.</p>
+                                <ScenePreview
+                                    id="start_robot_preview"
+                                    scene={$sceneStore}
+                                    unresolved={$componentStore.unresolved}
+                                    class="h-32 w-64 rounded border"
+                                    camera="back"
+                                    robotFocus={true}
+                                    tilt={true}
+                                    interactive={true}
+                                    select="#robot"
+                                />
+                                <p class="text-sm text-gray-600">X is left/right; Y is front/back on the mat. Values are millimetres from the mat centre.</p>
+                                <p class="text-sm text-gray-600">Coordinates are millimetres from the mat centre. Heading 0° faces the gear/front end.</p>
+                                <div class="flex flex-row gap-2 items-center"><span class="w-28">X (mm)</span><Input aria-label="Robot X position in millimetres" type="number" bind:value={startX} on:change={updateStartCoordinates} /></div>
+                                <div class="flex flex-row gap-2 items-center"><span class="w-28">Y (mm)</span><Input aria-label="Robot Y position in millimetres" type="number" bind:value={startY} on:change={updateStartCoordinates} /></div>
+                                <div class="flex flex-row gap-2 items-center"><span class="w-28">Heading</span><Input aria-label="Robot heading in degrees" type="number" bind:value={startHeading} /></div>
+                                <input class="w-full" aria-label="Robot heading" type="range" min="-180" max="180" step="1" bind:value={startHeading} on:input={updateStartHeading} />
+                                <div class="flex flex-row justify-center gap-2"><Button on:click={hideStartPosition}>CANCEL</Button><Button on:click={setStartPosition} color="green">APPLY</Button></div>
+                            </div>
+                        </div>
+                    {/if}
+                </div>
+                <div class="absolute bottom-4 left-4 z-40 rounded-xl bg-white/95 p-2 shadow-lg border border-gray-300">
+                    <div class="text-xs font-semibold text-gray-700 text-center mb-1">Robot X/Y position</div>
+                    <div class="grid grid-cols-3 gap-1 items-center justify-items-center">
+                        <span></span>
+                        <button
+                            type="button"
+                            class="h-9 w-9 rounded border border-gray-400 bg-gray-100 text-xl leading-none hover:bg-blue-100"
+                            aria-label="Move robot toward negative Y"
+                            title="Move robot toward negative Y"
+                            on:click={() => moveRobotOnMat(0, -ROBOT_MOVE_STEP)}
+                        >↑</button>
+                        <span></span>
+                        <button
+                            type="button"
+                            class="h-9 w-9 rounded border border-gray-400 bg-gray-100 text-xl leading-none hover:bg-blue-100"
+                            aria-label="Move robot toward negative X"
+                            title="Move robot toward negative X"
+                            on:click={() => moveRobotOnMat(-ROBOT_MOVE_STEP, 0)}
+                        >←</button>
+                        <button
+                            type="button"
+                            class="h-9 w-9 rounded border border-gray-500 bg-gray-200 text-xs font-semibold leading-none hover:bg-blue-100"
+                            aria-label="Reset robot position"
+                            title="Reset robot to the FLL launch area"
+                            on:click={resetRobotPosition}
+                        >Reset</button>
+                        <button
+                            type="button"
+                            class="h-9 w-9 rounded border border-gray-400 bg-gray-100 text-xl leading-none hover:bg-blue-100"
+                            aria-label="Move robot toward positive X"
+                            title="Move robot toward positive X"
+                            on:click={() => moveRobotOnMat(ROBOT_MOVE_STEP, 0)}
+                        >→</button>
+                        <span></span>
+                        <button
+                            type="button"
+                            class="h-9 w-9 rounded border border-gray-400 bg-gray-100 text-xl leading-none hover:bg-blue-100"
+                            aria-label="Move robot toward positive Y"
+                            title="Move robot toward positive Y"
+                            on:click={() => moveRobotOnMat(0, ROBOT_MOVE_STEP)}
+                        >↓</button>
+                        <span></span>
+                    </div>
+                    <div class="mt-1 text-[10px] text-gray-500 text-center">25 mm per click</div>
+                </div>
+                {#if select && select !== '#map' && select !== '#all' && select !== '#robot'}
                     <button
                         class="absolute bottom-[70px] right-[60px] text-white"
                         on:click={moveObjectUp}
@@ -746,9 +949,12 @@
                         class="h-full w-full"
                         map={mapFile}
                         {rotate}
-                        {camera}
-                        {tilt}
+                        camera={startPositionVisible ? 'top' : camera}
+                        tilt={startPositionVisible ? false : tilt}
                         {select}
+                        interactive={startPositionVisible}
+                        placementMode={startPositionVisible}
+                        on:placeRobot={placeRobotFromMap}
                     />
                 </div>
             </div>

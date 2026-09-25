@@ -46,11 +46,13 @@
     }
 
     onMount(() => {
-        window.addEventListener('mouseup', handleRelease);
+        window.addEventListener('pointerup', handleRelease);
+        window.addEventListener('pointercancel', handleRelease);
     });
 
     onDestroy(() => {
-        window.removeEventListener('mouseup', handleRelease);
+        window.removeEventListener('pointerup', handleRelease);
+        window.removeEventListener('pointercancel', handleRelease);
     });
 
     const brightness: Record<string, string> = {
@@ -143,14 +145,14 @@
     </div>
     <div class="flex flex-row justify-around">
         <div class="flex flex-row items-center gap-1">
-            <button on:mousedown={() => handlePress('left')}>
+            <button aria-label="Hub left button" on:pointerdown={() => handlePress('left')} on:keydown={(event) => { if (event.key === 'Enter' || event.key === ' ') handlePress('left'); }} on:keyup={handleRelease}>
                 <div
-                    class="border border-black rounded-l-xl m-1 w-[40px] bg-white hover:bg-blue-200"
+                    class="border border-black rounded-l-xl m-1 w-[40px] {pressed === 'left' ? 'bg-blue-300' : 'bg-white'} hover:bg-blue-200"
                 >
                     <AngleLeftOutline class="ml-0.5" />
                 </div>
             </button>
-            <button on:mousedown={() => handlePress('center')}>
+            <button aria-label="Hub center button" on:click={() => dispatch('centerPress')}>
                 <svg
                     class="w-10 h-10 text-white hover:text-blue-200"
                     viewBox="0 0 40 40"
@@ -160,9 +162,9 @@
                     <circle r="15" cx="20" cy="20" stroke="#000" fill={centreButtonColour} />
                 </svg>
             </button>
-            <button on:mousedown={() => handlePress('right')}>
+            <button aria-label="Hub right button" on:pointerdown={() => handlePress('right')} on:keydown={(event) => { if (event.key === 'Enter' || event.key === ' ') handlePress('right'); }} on:keyup={handleRelease}>
                 <div
-                    class="border border-black rounded-r-xl m-1 w-[40px] bg-white hover:bg-blue-200"
+                    class="border border-black rounded-r-xl m-1 w-[40px] {pressed === 'right' ? 'bg-blue-300' : 'bg-white'} hover:bg-blue-200"
                 >
                     <AngleRightOutline class="ml-4" />
                 </div>

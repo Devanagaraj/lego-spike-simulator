@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2360" height="1140" viewBox="0 0 2360 1140">
+  <rect width="2360" height="1140" fill="#eef4f8"/>
+  <rect x="20" y="20" width="2320" height="1100" rx="10" fill="none" stroke="#1e4e75" stroke-width="10"/>
+  <g stroke="#b6c9d8" stroke-width="2" opacity=".8">
+    <path d="M20 120h2320M20 220h2320M20 320h2320M20 420h2320M20 520h2320M20 620h2320M20 720h2320M20 820h2320M20 920h2320M20 1020h2320"/>
+    <path d="M120 20v1100M220 20v1100M320 20v1100M420 20v1100M520 20v1100M620 20v1100M720 20v1100M820 20v1100M920 20v1100M1020 20v1100M1120 20v1100M1220 20v1100M1320 20v1100M1420 20v1100M1520 20v1100M1620 20v1100M1720 20v1100M1820 20v1100M1920 20v1100M2020 20v1100M2120 20v1100M2220 20v1100"/>
+  </g>
+  <g fill="none" stroke="#185a8c" stroke-width="5">
+    <path d="M1180 20v1100M20 570h2320"/>
+    <circle cx="1180" cy="570" r="180" stroke-dasharray="8 8"/><circle cx="1180" cy="570" r="360" stroke-dasharray="10 10"/><circle cx="1180" cy="570" r="540" stroke-dasharray="14 10"/>
+  </g>
+  <g transform="translate(1180 570)" fill="none" stroke="#2e719e">
+    <circle r="470" stroke-width="3"/>
+    <g stroke-width="3">
+      <path d="M0-470v22" transform="rotate(0)"/><path d="M0-470v22" transform="rotate(15)"/><path d="M0-470v22" transform="rotate(30)"/><path d="M0-470v22" transform="rotate(45)"/>
+      <path d="M0-470v22" transform="rotate(60)"/><path d="M0-470v22" transform="rotate(75)"/><path d="M0-470v22" transform="rotate(90)"/><path d="M0-470v22" transform="rotate(105)"/>
+      <path d="M0-470v22" transform="rotate(120)"/><path d="M0-470v22" transform="rotate(135)"/><path d="M0-470v22" transform="rotate(150)"/><path d="M0-470v22" transform="rotate(165)"/>
+      <path d="M0-470v22" transform="rotate(180)"/><path d="M0-470v22" transform="rotate(195)"/><path d="M0-470v22" transform="rotate(210)"/><path d="M0-470v22" transform="rotate(225)"/>
+      <path d="M0-470v22" transform="rotate(240)"/><path d="M0-470v22" transform="rotate(255)"/><path d="M0-470v22" transform="rotate(270)"/><path d="M0-470v22" transform="rotate(285)"/>
+      <path d="M0-470v22" transform="rotate(300)"/><path d="M0-470v22" transform="rotate(315)"/><path d="M0-470v22" transform="rotate(330)"/><path d="M0-470v22" transform="rotate(345)"/>
+    </g>
+    <g stroke="#183b59" stroke-width="7"><path d="M0-470v38" transform="rotate(0)"/><path d="M0-470v38" transform="rotate(90)"/><path d="M0-470v38" transform="rotate(180)"/><path d="M0-470v38" transform="rotate(270)"/></g>
+  </g>
+  <path d="M1180 570V70l-18 36h36z" fill="#d44444" stroke="#d44444" stroke-width="6"/>
+  <g font-family="Arial,sans-serif" fill="#183b59" text-anchor="middle">
+    <text x="1180" y="70" font-size="34" font-weight="700">ORIENTATION / ANGLE MAP</text>
+    <text x="1180" y="108" font-size="20">2360 x 1140 mm - centreline, distance rings and heading reference</text>
+    <text x="1180" y="145" font-size="25" font-weight="700">0 deg / FRONT</text>
+    <text x="1515" y="245" font-size="24">45 deg</text><text x="1648" y="578" font-size="24">90 deg</text><text x="1515" y="920" font-size="24">135 deg</text><text x="1180" y="1090" font-size="24">180 deg</text>
+    <text x="845" y="920" font-size="24">-135 deg</text><text x="712" y="578" font-size="24">-90 deg</text><text x="845" y="245" font-size="24">-45 deg</text><text x="1180" y="610" font-size="22">START / ORIGIN</text>
+  </g>
+  <g font-family="Arial,sans-serif" font-size="20" fill="#183b59"><text x="1380" y="566">180 mm</text><text x="1560" y="566">360 mm</text><text x="1740" y="566">540 mm</text><text x="30" y="1110">-1180 mm</text><text x="2250" y="1110">+1180 mm</text><text x="1140" y="1090">+570 mm</text><text x="1140" y="46">-570 mm</text></g>
+</svg>
