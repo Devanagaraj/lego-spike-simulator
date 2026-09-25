@@ -76,7 +76,7 @@
     export let attachmentsOpen = false;
     export let hub = new Hub();
     export let camera: 'top' | 'left' | 'right' | 'front' | 'back' | 'adaptive' = 'adaptive';
-    export let robotFocus = false;
+    export let robotFocus = true;
     export let tilt = true;
     export let resetViewRequest = 0;
     let viewYaw = 0;
@@ -116,7 +116,8 @@
     type Panel = 'hub' | 'led' | 'gyro';
     type PanelState = 'expanded' | 'minimized' | 'closed';
     let panelState: Record<Panel, PanelState> = { hub: 'expanded', led: 'closed', gyro: 'expanded' };
-    // Keep the model unobstructed on first load. The panel menu can restore it.
+    // Keep the model in the gear-facing robot view on startup, with a little
+    // breathing room around the chassis.
     let sideRailOpen = false;
     let panelMenuOpen = false;
     let gyro = { yaw: 0, pitch: 0, roll: 0, rate: 0, accelerationX: 0, accelerationZ: 0 };
@@ -156,14 +157,13 @@
         // The gear end is the front of both bundled robots. Use the same
         // back-facing camera and zero heading whenever a model is loaded.
         camera = 'back';
-        // Keep the gear-facing back orientation while showing as much of the
-        // mat as possible. The robot remains visible at its selected launch
-        // point instead of being zoomed into a close-up on refresh/load.
-        robotFocus = false;
+        // Keep the gear-facing back orientation while giving the robot a little
+        // breathing room instead of filling the whole panel.
+        robotFocus = true;
         tilt = true;
         viewYaw = 0;
         viewPitch = 0;
-        viewZoom = 1;
+        viewZoom = 0.85;
         viewPanX = 0;
         viewPanZ = 0;
     }

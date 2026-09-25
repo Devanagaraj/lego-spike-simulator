@@ -64,9 +64,8 @@
     let cameraOpen = false;
     // Show the gear-facing robot view as soon as the simulator opens.
     let camera: 'top' | 'left' | 'right' | 'front' | 'back' | 'adaptive' = 'back';
-    // Open from the gear-facing back with the widest useful mat view. Users
-    // can switch to a robot close-up with the Robot view / Map view button.
-    let robotFocus = false;
+    // Open from the gear-facing back in a slightly zoomed-out robot view.
+    let robotFocus = true;
     let tilt = true;
 
     let cameraMenu = buildCameraMenu();
@@ -406,6 +405,14 @@
                 <div class="w-8 h-8 flex flex-col justify-center items-center">
                     <img alt="code" width="32" height="32" src="icons/Brick.svg" />
                 </div>
+                {#if !blocklyOpen}
+                    <Button id="open_blockly_button" color="light" class="!p-2" on:click={openBlockly}>
+                        <div class="w-8 h-8 flex flex-col justify-center items-center">
+                            <img alt="blockly" width="32" height="32" src="icons/BlocklyIcon.svg" />
+                        </div>
+                    </Button>
+                    <Tooltip triggeredBy="#open_blockly_button">Open the code panel</Tooltip>
+                {/if}
                 <Button color={robotButtonColour} class="!p-2" id="robot_menu_button">
                     <div class="w-8 h-8 flex flex-col justify-center items-center">
                         <img alt="robot" width="32" height="32" src="icons/Robot.svg" />
@@ -517,14 +524,6 @@
                     <Tooltip
                         >Start the simulation, running the code in the code panel (Space)</Tooltip
                     >
-                {/if}
-                {#if !blocklyOpen}
-                    <Button color="light" class="!p-2" on:click={openBlockly}>
-                        <div class="w-8 h-8 flex flex-col justify-center items-center">
-                            <img alt="blockly" width="32" height="32" src="icons/BlocklyIcon.svg" />
-                        </div>
-                    </Button>
-                    <Tooltip>Open the code panel</Tooltip>
                 {/if}
                 <div class="flex-1" />
                 {#if blocklyOpen}

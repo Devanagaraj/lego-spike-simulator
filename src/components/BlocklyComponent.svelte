@@ -31,7 +31,7 @@
     import { blocks } from '$lib/blockly/blocks';
     import { toolbox } from '$lib/blockly/toolbox';
     import { type BlocklyState } from '$lib/blockly/state';
-    import { Button, CloseButton, Tooltip } from 'flowbite-svelte';
+    import { Button, CloseButton, Modal, Tooltip } from 'flowbite-svelte';
     import { loadScratchSb3 } from '$lib/scratch/sb3';
     import { createManifest } from '$lib/scratch/manifest';
     import { convertToBlockly, convertToScratch, mergeBlockly } from '$lib/scratch/blockly';
@@ -55,8 +55,11 @@
     let print = false;
     let printDialogOpen = false;
     let printColour = false;
+    let instructionsOpen = false;
+    let instructionsReady = false;
     let workspaceSaveTimer: ReturnType<typeof setTimeout> | undefined;
     const workspaceCacheKey = 'lego-spike-workspace-v1';
+    const instructionsCacheKey = 'lego-spike-instructions-seen-v1';
 
     function saveWorkspaceToBrowser() {
         if (!workspace) return;
@@ -95,6 +98,12 @@
     }
 
     onMount(() => {
+        try {
+            instructionsOpen = localStorage.getItem(instructionsCacheKey) !== '1';
+        } catch {
+            instructionsOpen = true;
+        }
+        instructionsReady = true;
         fieldAngle.registerFieldAngle();
         colourPkg.registerFieldColour();
         Blockly.common.defineBlocksWithJsonArray(procedureBlocks);
@@ -506,6 +515,13 @@
 
     $: resizeWorkspace(simulatorOpen);
     $: setPrintMode(print);
+    $: if (instructionsReady && !instructionsOpen) {
+        try {
+            localStorage.setItem(instructionsCacheKey, '1');
+        } catch {
+            // The instructions can still be dismissed when storage is unavailable.
+        }
+    }
 </script>
 
 {#key numberOfLoads}
@@ -520,6 +536,36 @@
 />
 <ProcedureDialog bind:modalOpen={procedureDialogOpen} bind:callback={procedureCreateCallback} />
 <PrintDialog bind:modalOpen={printDialogOpen} callback={printCallback} />
+
+<Modal title="Welcome to the LEGO SPIKE Simulator" size="xl" outsideclose={true} bind:open={instructionsOpen}>
+    <div class="flex max-w-3xl flex-col gap-4 text-sm text-gray-700">
+        <p>
+            Build and run LEGO SPIKE programs in your browser. A small example program is ready in the
+            code workspace.
+        </p>
+        <div class="grid gap-3 md:grid-cols-2">
+            <div class="rounded-lg bg-blue-50 p-3">
+                <h2 class="font-semibold text-gray-900">Write and run code</h2>
+                <p class="mt-1">Drag blocks into the workspace, then press Play or Space to start. Press Stop or Space again to stop.</p>
+            </div>
+            <div class="rounded-lg bg-blue-50 p-3">
+                <h2 class="font-semibold text-gray-900">Explore the robot</h2>
+                <p class="mt-1">Drag the 3D view to orbit and use the wheel or pinch gesture to zoom. Use Robot view, Map view, and Reset view in the simulator toolbar.</p>
+            </div>
+            <div class="rounded-lg bg-blue-50 p-3">
+                <h2 class="font-semibold text-gray-900">Configure hardware</h2>
+                <p class="mt-1">Use the robot, hub, wheel, attachment, scene, and Library buttons to configure the model and its connections.</p>
+            </div>
+            <div class="rounded-lg bg-blue-50 p-3">
+                <h2 class="font-semibold text-gray-900">Save your work</h2>
+                <p class="mt-1">Your code and robot settings are cached in this browser. Use the folder and save buttons to import or export programs.</p>
+            </div>
+        </div>
+        <div class="flex justify-end">
+            <Button on:click={() => (instructionsOpen = false)}>Start exploring</Button>
+        </div>
+    </div>
+</Modal>
 
 <div class="relative h-full w-full overflow-auto flex flex-row">
     <!-- flex-col-reverse so that the buttons are higher in z order -->
